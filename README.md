@@ -1,4 +1,4 @@
-# executive-security-dashboard
+
 # Executive Security Dashboard
 
 A dynamic dashboard that builds from JSON, lets users add/remove widgets, assign/unassign across categories, and search all widgets.
