@@ -1,0 +1,438 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dynamic Dashboard — Widgets & Categories</title>
+  <meta name="description" content="Single-file dashboard that builds from JSON, lets users add/remove widgets, assign/unassign across categories, and search all widgets. State persists in localStorage." />
+  <style>
+    :root{
+      --bg: #0b0f17;
+      --panel: #111828;
+      --panel-2: #0f1626;
+      --card: #121a2b;
+      --muted: #9aa4b2;
+      --text: #e6eaf0;
+      --accent: #4f46e5;
+      --accent-2: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --border: #1f2a44;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      color:var(--text); background:linear-gradient(180deg, #0b0f17 0%, #0a1221 100%);
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      backdrop-filter:saturate(1.2) blur(8px);
+      background:linear-gradient(180deg, rgba(13,18,31,.9), rgba(13,18,31,.6));
+      border-bottom:1px solid var(--border);
+    }
+    .container{max-width:1200px; margin:0 auto; padding:20px;}
+    .toolbar{display:flex; gap:12px; align-items:center; justify-content:space-between}
+    .brand{display:flex; gap:12px; align-items:center}
+    .logo{width:36px; height:36px; display:grid; place-items:center; border-radius:12px; background:linear-gradient(135deg, var(--accent), #7c3aed)}
+    h1{font-size:20px; margin:0; letter-spacing:.3px}.controls{display:flex; gap:10px; align-items:center}
+.input{background:var(--panel); border:1px solid var(--border); color:var(--text); padding:10px 12px; border-radius:12px; outline:none; width:260px}
+.btn{border:1px solid var(--border); background:var(--panel); color:var(--text); padding:10px 14px; border-radius:12px; cursor:pointer; box-shadow:var(--shadow); transition:.2s}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg, var(--accent), #7c3aed); border-color:transparent}
+.btn.ghost{background:transparent}
+
+main{padding:24px 0}
+.grid{display:grid; grid-template-columns:1fr 320px; gap:24px}
+@media (max-width: 980px){ .grid{grid-template-columns:1fr} }
+
+.category{background:linear-gradient(180deg, var(--panel-2), #0c1424); border:1px solid var(--border); border-radius:var(--radius); padding:16px}
+.category + .category{margin-top:24px}
+.category-header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px}
+.category-title{display:flex; align-items:center; gap:10px}
+.chip{font-size:12px; color:var(--muted); background:#0b1529; border:1px solid var(--border); padding:4px 8px; border-radius:999px}
+
+.widgets{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px}
+@media (max-width: 900px){ .widgets{grid-template-columns:repeat(2,1fr)} }
+@media (max-width: 580px){ .widgets{grid-template-columns:1fr} }
+
+.widget{position:relative; background:linear-gradient(180deg, #0f172a, #0c1322); border:1px solid var(--border); border-radius:14px; padding:12px; min-height:100px; box-shadow:var(--shadow)}
+.widget h4{margin:0 24px 6px 0; font-size:14px}
+.widget p{margin:0; color:var(--muted); font-size:13px; line-height:1.45}
+.widget .remove{position:absolute; top:8px; right:8px; border:none; background:transparent; color:#93a0b5; cursor:pointer; border-radius:8px; padding:6px}
+.widget .remove:hover{background:#152036; color:#d7deea}
+
+aside{position:relative}
+.panel{position:sticky; top:92px; background:linear-gradient(180deg, var(--panel), #0e1729); border:1px solid var(--border); border-radius:var(--radius); padding:14px}
+.panel h3{margin:0 0 8px 0; font-size:16px}
+.panel small{color:var(--muted)}
+.list{margin-top:10px; max-height:60vh; overflow:auto; border-top:1px dashed var(--border)}
+.row{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 0; border-bottom:1px dashed var(--border)}
+.row-title{font-size:14px}
+.row-actions{display:flex; gap:8px}
+.badge{font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted)}
+
+dialog{border:none; border-radius:18px; padding:0; background:transparent}
+.modal{min-width:340px; max-width:92vw; background:linear-gradient(180deg, #0f1628, #0d1526); border:1px solid var(--border); border-radius:18px; box-shadow:var(--shadow)}
+.modal header{position:relative; background:transparent; border:none}
+.modal .header{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--border)}
+.modal .content{padding:16px 18px}
+.modal .actions{display:flex; gap:10px; padding:16px 18px; border-top:1px solid var(--border); justify-content:flex-end}
+.field{display:grid; gap:6px; margin-bottom:12px}
+label{font-size:13px; color:#c8cfda}
+input[type="text"], textarea, select{background:#0c1426; border:1px solid var(--border); color:var(--text); border-radius:12px; padding:10px 12px; outline:none}
+textarea{min-height:80px; resize:vertical}
+
+.muted{color:var(--muted)}
+.sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0}
+
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="toolbar" role="toolbar" aria-label="Global Toolbar">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">🔷</div>
+          <div>
+            <h1>Executive Security Dashboard</h1>
+            <small class="muted">Built dynamically from JSON • Persistent local state</small>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="btn" id="openAssign">Manage assignments</button>
+          <button class="btn ghost" id="resetState" title="Reset to demo data">Reset</button>
+        </div>
+      </div>
+    </div>
+  </header>  <main class="container">
+    <div class="grid">
+      <section id="categories"></section>
+      <aside>
+        <div class="panel" aria-labelledby="allWidgetsTitle">
+          <h3 id="allWidgetsTitle">All Widgets</h3>
+          <small>Search and assign widgets to categories</small>
+          <div style="margin-top:10px; display:flex; gap:8px">
+            <input id="searchAll" class="input" type="text" placeholder="Search widgets…" aria-label="Search widgets" />
+            <button id="addNewFromPanel" class="btn">+ New</button>
+          </div>
+          <div class="list" id="widgetList" role="list"></div>
+        </div>
+      </aside>
+    </div>
+  </main>  <!-- Add / Edit Widget Modal -->  <dialog id="widgetDialog">
+    <div class="modal" role="dialog" aria-labelledby="widgetDialogTitle" aria-modal="true">
+      <div class="header">
+        <div style="display:flex; gap:10px; align-items:center">
+          <strong id="widgetDialogTitle">Add Widget</strong>
+          <span class="badge" id="contextCategory">—</span>
+        </div>
+        <button class="btn ghost" data-close-dialog title="Close">✖</button>
+      </div>
+      <form id="widgetForm">
+        <div class="content">
+          <div class="field">
+            <label for="wName">Widget name</label>
+            <input id="wName" name="name" type="text" required placeholder="e.g., Open Findings" />
+          </div>
+          <div class="field">
+            <label for="wText">Widget text</label>
+            <textarea id="wText" name="text" required placeholder="Short description or sample content"></textarea>
+          </div>
+          <div class="field">
+            <label for="wAssign">Add to category</label>
+            <select id="wAssign" name="category" required></select>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn" type="button" data-close-dialog>Cancel</button>
+          <button class="btn primary" type="submit">Add Widget</button>
+        </div>
+      </form>
+    </div>
+  </dialog>  <!-- Manage Assignments Modal -->  <dialog id="assignDialog">
+    <div class="modal" role="dialog" aria-labelledby="assignDialogTitle" aria-modal="true">
+      <div class="header">
+        <strong id="assignDialogTitle">Manage Widget Assignments</strong>
+        <button class="btn ghost" data-close-dialog title="Close">✖</button>
+      </div>
+      <div class="content">
+        <div class="field">
+          <label for="assignSelect">Choose widget</label>
+          <select id="assignSelect"></select>
+        </div>
+        <div id="categoryChecks" class="field"></div>
+        <small class="muted">Tip: uncheck a category here to remove the widget from that category.</small>
+      </div>
+      <div class="actions">
+        <button class="btn" data-close-dialog>Done</button>
+      </div>
+    </div>
+  </dialog>  <template id="tpl-widget-row">
+    <div class="row" role="listitem">
+      <div class="row-title"></div>
+      <div class="row-actions">
+        <span class="badge catCount" title="Assigned categories">0 cats</span>
+        <button class="btn" data-assign>Assign</button>
+      </div>
+    </div>
+  </template>  <script>
+    // --- Simple Store with Pub/Sub and persistence ---
+    const Store = (() => {
+      const KEY = 'dashboardState.v1';
+      const subs = new Set();
+      const defaultState = {
+        catalog: [
+          { id: 'w1', name: 'Open Findings', text: 'Random text: 128 open findings across CSPM.' },
+          { id: 'w2', name: 'Coverage Score', text: 'Coverage at 82% this week.' },
+          { id: 'w3', name: 'Top Misconfigurations', text: 'S3 public buckets, weak IAM roles, open security groups.' },
+          { id: 'w4', name: 'KPI Trend', text: 'Tickets closed ↑ 12% WoW.' },
+        ],
+        categories: [
+          { id: 'c1', name: 'CSPM Executive Dashboard', widgets: ['w1','w2'] },
+          { id: 'c2', name: 'Posture Management', widgets: ['w3'] },
+          { id: 'c3', name: 'Risk Overview', widgets: ['w4'] },
+        ]
+      };
+      let state = load();
+
+      function load(){
+        try{ const raw = localStorage.getItem(KEY); if(raw) return JSON.parse(raw); }catch(e){}
+        return structuredClone(defaultState);
+      }
+      function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+      function notify(){ save(); subs.forEach(fn => fn(getState())); }
+      function getState(){ return structuredClone(state); }
+
+      const api = {
+        subscribe(fn){ subs.add(fn); return () => subs.delete(fn); },
+        getState,
+        reset(){ state = structuredClone(defaultState); notify(); },
+        addWidget({ name, text, categoryId }){
+          const id = `w${crypto.randomUUID().slice(0,8)}`;
+          state.catalog.push({ id, name, text });
+          const cat = state.categories.find(c => c.id === categoryId);
+          if(cat && !cat.widgets.includes(id)) cat.widgets.push(id);
+          notify();
+        },
+        assignWidget(widgetId, categoryId, on){
+          const cat = state.categories.find(c => c.id === categoryId);
+          if(!cat) return; const idx = cat.widgets.indexOf(widgetId);
+          if(on && idx === -1) cat.widgets.push(widgetId);
+          if(!on && idx !== -1) cat.widgets.splice(idx,1);
+          notify();
+        },
+        removeFromCategory(widgetId, categoryId){
+          const cat = state.categories.find(c => c.id === categoryId);
+          if(!cat) return; const idx = cat.widgets.indexOf(widgetId);
+          if(idx !== -1) { cat.widgets.splice(idx,1); notify(); }
+        },
+        addCategory(name){
+          state.categories.push({ id: `c${crypto.randomUUID().slice(0,8)}`, name, widgets: [] });
+          notify();
+        }
+      };
+      return api;
+    })();
+
+    // --- DOM helpers ---
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    // --- Renderers ---
+    function render(){
+      const { categories, catalog } = Store.getState();
+      renderCategories(categories, catalog);
+      renderAllWidgets(catalog, categories);
+      renderAssignDialogOptions(catalog, categories);
+      renderAddWidgetCategorySelect(categories);
+    }
+
+    function renderCategories(categories, catalog){
+      const host = $('#categories');
+      host.innerHTML = '';
+      categories.forEach(cat => {
+        const sec = document.createElement('section');
+        sec.className = 'category';
+        sec.innerHTML = `
+          <div class="category-header">
+            <div class="category-title">
+              <strong>${escapeHtml(cat.name)}</strong>
+              <span class="chip">${cat.widgets.length} widgets</span>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center">
+              <button class="btn" data-add-widget data-cat="${cat.id}">+ Add Widget</button>
+            </div>
+          </div>
+          <div class="widgets" role="list"></div>
+        `;
+        const grid = $('.widgets', sec);
+        cat.widgets.forEach(wid => {
+          const w = catalog.find(x => x.id === wid);
+          if(!w) return;
+          const card = document.createElement('article');
+          card.className = 'widget';
+          card.setAttribute('role','listitem');
+          card.innerHTML = `
+            <button class="remove" title="Remove from category" aria-label="Remove from ${escapeHtml(cat.name)}" data-remove data-cat="${cat.id}" data-widget="${w.id}">✖</button>
+            <h4>${escapeHtml(w.name)}</h4>
+            <p>${escapeHtml(w.text)}</p>
+          `;
+          grid.appendChild(card);
+        });
+        host.appendChild(sec);
+      });
+    }
+
+    function renderAllWidgets(catalog, categories){
+      const list = $('#widgetList');
+      const q = $('#searchAll').value.trim().toLowerCase();
+      list.innerHTML = '';
+      catalog
+        .filter(w => !q || w.name.toLowerCase().includes(q) || w.text.toLowerCase().includes(q))
+        .forEach(w => {
+          const row = $('#tpl-widget-row').content.firstElementChild.cloneNode(true);
+          $('.row-title', row).textContent = w.name;
+          const count = categories.reduce((n,c) => n + (c.widgets.includes(w.id)?1:0), 0);
+          $('.catCount', row).textContent = `${count} cat${count===1?'':'s'}`;
+          row.dataset.widget = w.id;
+          list.appendChild(row);
+        });
+    }
+
+    function renderAssignDialogOptions(catalog, categories){
+      const sel = $('#assignSelect');
+      const current = sel.value;
+      sel.innerHTML = catalog.map(w => `<option value="${w.id}">${escapeHtml(w.name)}</option>`).join('');
+      sel.value = current || (catalog[0]?.id || '');
+      buildChecks();
+
+      function buildChecks(){
+        const wid = sel.value; const wrap = $('#categoryChecks');
+        wrap.innerHTML = '<label>Assign to categories</label>' + categories.map(c => {
+          const checked = c.widgets.includes(wid) ? 'checked' : '';
+          return `<label style="display:flex; align-items:center; gap:8px">
+            <input type="checkbox" data-check-cat value="${c.id}" ${checked} />
+            <span>${escapeHtml(c.name)}</span>
+          </label>`;
+        }).join('');
+      }
+      sel.onchange = buildChecks;
+    }
+
+    function renderAddWidgetCategorySelect(categories){
+      const s = $('#wAssign');
+      const current = s.value;
+      s.innerHTML = categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+      if(current) s.value = current;
+    }
+
+    // --- Utils ---
+    function escapeHtml(str){
+      return String(str).replace(/[&<>"]+/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
+    }
+
+    // --- Events ---
+    function wireEvents(){
+      // Search all widgets
+      $('#searchAll').addEventListener('input', render);
+
+      // Open Add Widget modal from panel
+      $('#addNewFromPanel').addEventListener('click', () => openWidgetDialog());
+
+      // Open Add Widget modal from a category
+      document.body.addEventListener('click', (e) => {
+        const addBtn = e.target.closest('[data-add-widget]');
+        if(addBtn){
+          const catId = addBtn.getAttribute('data-cat');
+          openWidgetDialog(catId);
+        }
+      });
+
+      // Remove widget from category
+      document.body.addEventListener('click', (e) => {
+        const rm = e.target.closest('[data-remove]');
+        if(rm){
+          Store.removeFromCategory(rm.getAttribute('data-widget'), rm.getAttribute('data-cat'));
+        }
+      });
+
+      // Open Manage Assignments
+      $('#openAssign').addEventListener('click', () => {
+        $('#assignDialog').showModal();
+      });
+
+      // Assign from All Widgets list
+      $('#widgetList').addEventListener('click', (e) => {
+        const row = e.target.closest('[role="listitem"]');
+        if(!row) return;
+        if(e.target.matches('[data-assign]')){
+          $('#assignDialog').showModal();
+          $('#assignSelect').value = row.dataset.widget;
+          // Trigger rebuild of checks
+          $('#assignSelect').dispatchEvent(new Event('change'));
+        }
+      });
+
+      // Toggle assignments in dialog
+      $('#categoryChecks').addEventListener('change', (e) => {
+        const cb = e.target.closest('[data-check-cat]');
+        if(!cb) return;
+        const wid = $('#assignSelect').value;
+        Store.assignWidget(wid, cb.value, cb.checked);
+      });
+
+      // Add widget form
+      $('#widgetForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.currentTarget);
+        Store.addWidget({ name: fd.get('name').trim(), text: fd.get('text').trim(), categoryId: fd.get('category') });
+        closeDialogs();
+        e.currentTarget.reset();
+      });
+
+      // Close dialog buttons
+      document.body.addEventListener('click', (e) => {
+        if(e.target.matches('[data-close-dialog]')) closeDialogs();
+      });
+
+      // Reset demo state
+      $('#resetState').addEventListener('click', () => {
+        if(confirm('Reset the dashboard to the demo dataset?')) Store.reset();
+      });
+    }
+
+    function openWidgetDialog(catId){
+      const d = $('#widgetDialog');
+      $('#widgetDialogTitle').textContent = 'Add Widget';
+      const { categories } = Store.getState();
+      renderAddWidgetCategorySelect(categories);
+      $('#contextCategory').textContent = catId ? (categories.find(c => c.id === catId)?.name || '—') : 'Select a category';
+      $('#wAssign').value = catId || categories[0]?.id || '';
+      d.showModal();
+      $('#wName').focus();
+    }
+
+    function closeDialogs(){ $$('#widgetDialog, #assignDialog').forEach(d => d.close()); }
+
+    // --- Init ---
+    wireEvents();
+    Store.subscribe(render);
+    render();
+  </script>  <!--
+    HOW TO RUN LOCALLY
+    1) Save this file as index.html
+    2) Open it directly in any modern browser (Chrome, Edge, Firefox)
+       — no build tools or servers required.
+
+    WHAT THIS DEMO COVERS (per assignment):
+    ✓ Build dashboard dynamically from JSON (state.catalog + state.categories)
+    ✓ Add widget via "+ Add Widget" (name + text + target category)
+    ✓ Remove widget from a category via cross icon
+    ✓ Search through a list of all widgets (right panel)
+    ✓ Assign / unassign widgets to categories from a dedicated UI
+    ✓ Local state management with a minimal store + pub/sub, persisted to localStorage
+    ✓ Responsive, accessible, single‑file implementation with no external deps
+  --></body>
+        </html>
